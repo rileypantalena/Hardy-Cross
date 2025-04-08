@@ -9,6 +9,7 @@ import numpy as np
 
 # Constants
 N_EXPONENT = 1.852  # Exponent in the Hazen-Williams equation
+MAX_ITERATIONS = 100 # Point at which loop stops if tolerance is not met
 
 
 def kfunc(length, roughness, diameter):
@@ -54,13 +55,13 @@ def main():
     # For loop 2, the sign on the shared branch is reversed compared to loop 1
     sign_2 = np.array([-1, -1, 1, 1])
 
-    iterations = 100
+    MAX_ITERATIONS = 100
     tolerance = 0.01
 
     # Iterative process:
     # For each loop, compute independent corrections for non-shared pipes, then update the shared pipe
     # by averaging the flows determined from each loop.
-    for i in range(iterations):
+    for i in range(MAX_ITERATIONS):
         # ---- Loop 1: Compute head loss and derivative for each pipe ----
         h1 = np.zeros(4)
         dh1 = np.zeros(4)
@@ -84,7 +85,7 @@ def main():
 
         # In loop 2, the shared pipe (index 0) is reversed.
         f2 = -h2[0] + h2[1] + h2[2] + h2[3]
-        d2 = dh2.sum()
+        d2 = -dh2[0] + dh2[1] + dh2[2] + dh2[3]
         delta2 = -f2 / d2  # Correction for loop 2
 
         # ---- Update flow rates (apply corrections) ----
