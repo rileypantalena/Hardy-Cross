@@ -1,3 +1,8 @@
+"""
+Riley Pantalena
+CEE3610 - Hardy Cross
+"""
+
 import numpy as np
 import math
 
