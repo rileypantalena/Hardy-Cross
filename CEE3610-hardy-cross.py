@@ -4,7 +4,6 @@ CEE3610 - Hardy Cross
 """
 
 import numpy as np
-import math
 
 # Constants
 n = 1.852  # Exponent in Hazen-Williams equation
