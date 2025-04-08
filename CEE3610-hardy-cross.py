@@ -66,9 +66,19 @@ for i in range(iterations):
     Qvalues2_new = Qvalues2 + deltaQ2
 
     # Average Q for pipe 4 (shared between loops)
-    avg_pipe4 = (Qvalues1_new[3] + Qvalues2_new[0]) / 2
-    Qvalues1_new[3] = avg_pipe4
-    Qvalues2_new[0] = avg_pipe4
+    # Compute headloss for the shared pipe as contributed by both loops
+    H_shared = (kvalues1[3] * abs(Qvalues1[3])**n) * sign1[3] + (kvalues2[0] * abs(Qvalues2[0])**n) * sign2[0]
+
+    # Compute the derivative contributions (dH/dQ) for the shared pipe from both loops
+    dH_dQ_shared = n * ( (kvalues1[3] * abs(Qvalues1[3])**(n-1)) + (kvalues2[0] * abs(Qvalues2[0])**(n-1)) )
+
+    # Then update the shared pipe with a single correction
+    deltaQ_shared = - H_shared / dH_dQ_shared
+    Q_shared_new = (Qvalues1[3] + deltaQ_shared + Qvalues2[0] + deltaQ_shared) / 2
+
+    # Set this corrected flow for both loop representations
+    Qvalues1_new[3] = Q_shared_new
+    Qvalues2_new[0] = Q_shared_new
 
     # Check convergence
     if abs(deltaQ1) < tolerance and abs(deltaQ2) < tolerance:
