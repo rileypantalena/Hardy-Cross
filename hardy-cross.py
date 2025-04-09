@@ -1,16 +1,15 @@
 """
 Riley Pantalena
 CEE3610 - Hardy Cross
-Coupled Hardy-Cross iteration for a two-loop network with a shared branch.
+Hardy Cross Method for a Two-Loop Network with a Shared Branch
 """
 
 import numpy as np
 
-
 # Constants
 N_EXPONENT = 1.852  # Exponent in the Hazen-Williams equation
-MAX_ITERATIONS = 100 # Point at which loop stops if tolerance is not met
-
+MAX_ITERATIONS = 100  # Maximum number of iterations
+TOLERANCE = 0.001  # Convergence tolerance
 
 def kfunc(length, roughness, diameter):
     """
@@ -18,107 +17,144 @@ def kfunc(length, roughness, diameter):
 
     Parameters:
         length (float): Pipe length in feet.
-        roughness (float): Roughness coefficient.
+        roughness (float): Roughness coefficient (C value).
         diameter (float): Pipe diameter in inches.
 
     Returns:
-        float: k such that head loss = k * |Q|^n (with sign attached separately).
+        float: k such that head loss = k * |Q|^n * sign(Q)
     """
     return (4.727 * length) / (roughness ** 1.852 * diameter ** 4.8704)
 
-
 def main():
-    # Define loop 1: pipes 1, 2, 3, and shared pipe (pipe 4)
-    # Pipe parameters: [length, diameter, roughness]
-    # (pipes 1-3 are unique to loop 1, and pipe 4 is shared)
-    k_values_1 = np.array([
-        kfunc(1500, 100, 10),  # pipe 1
-        kfunc(400, 100, 10),   # pipe 2
-        kfunc(600, 120, 10),   # pipe 3
-        kfunc(800, 110, 8)     # pipe 4 (shared)
-    ])
-    # Initial flow guesses in cfs for loop 1
-    q1 = np.array([0.77574, 2.0, 0.784386, 0.2156135])
-    # Assigned sign for head loss in loop 1 (defines pipe orientation)
-    sign_1 = np.array([1, -1, -1, 1])
-
-    # Define loop 2: pipes (shared pipe, then pipes 5, 6, 7)
-    # For loop 2, the shared pipe appears with reversed orientation.
-    k_values_2 = np.array([
-        kfunc(800, 110, 8),   # pipe 4 (shared)
-        kfunc(700, 110, 8),    # pipe 5
-        kfunc(1000, 90, 10),   # pipe 6
-        kfunc(750, 100, 10)    # pipe 7
-    ])
-    # Initial flow guesses in cfs for loop 2
-    q2 = np.array([0.2156135, 0.9632135, 1.4312265, 0.2156135])
-    # For loop 2, the sign on the shared branch is reversed compared to loop 1
-    sign_2 = np.array([-1, -1, 1, 1])
-
-    MAX_ITERATIONS = 100
-    tolerance = 0.01
-
-    # Iterative process:
-    # For each loop, compute independent corrections for non-shared pipes, then update the shared pipe
-    # by averaging the flows determined from each loop.
-    for i in range(MAX_ITERATIONS):
-        # ---- Loop 1: Compute head loss and derivative for each pipe ----
-        h1 = np.zeros(4)
-        dh1 = np.zeros(4)
-        for j in range(4):
-            # Head loss: k * |Q|^n, then apply the sign based on loop orientation
-            h1[j] = k_values_1[j] * np.abs(q1[j]) ** N_EXPONENT * sign_1[j]
-            # Derivative: n * k * |Q|^(n-1)
-            dh1[j] = N_EXPONENT * k_values_1[j] * np.abs(q1[j]) ** (N_EXPONENT - 1)
-
-        # In loop 1, pipes 1, 2, and 3 are non-shared (indices 0, 1, 2) and pipe 4 is shared.
-        f1 = h1.sum()
-        d1 = dh1.sum()
-        delta1 = -f1 / d1  # Correction for loop 1
-
-        # ---- Loop 2: Compute head loss and derivative for each pipe ----
-        h2 = np.zeros(4)
-        dh2 = np.zeros(4)
-        for j in range(4):
-            h2[j] = k_values_2[j] * np.abs(q2[j]) ** N_EXPONENT * sign_2[j]
-            dh2[j] = N_EXPONENT * k_values_2[j] * np.abs(q2[j]) ** (N_EXPONENT - 1)
-
-        # In loop 2, the shared pipe (index 0) is reversed.
-        f2 = -h2[0] + h2[1] + h2[2] + h2[3]
-        d2 = -dh2[0] + dh2[1] + dh2[2] + dh2[3]
-        delta2 = -f2 / d2  # Correction for loop 2
-
-        # ---- Update flow rates (apply corrections) ----
-        q1_new = q1.copy()
-        q2_new = q2.copy()
-
-        # For loop 1, update non-shared pipes (indices 0, 1, 2)
-        q1_new[:3] = q1[:3] + delta1
-        # For loop 2, update non-shared pipes (indices 1, 2, 3)
-        q2_new[1:] = q2[1:] + delta2
-
-        # ---- Update the shared pipe consistently ----
-        # Loop 1 sees the shared pipe as q1[3] + delta1.
-        # Loop 2 sees the shared pipe (reversed orientation) as q2[0] - delta2.
-        # The new shared pipe flow is the average of the two.
-        q_shared_new = ((q1[3] + delta1) + (q2[0] - delta2)) / 2
-        q1_new[3] = q_shared_new
-        q2_new[0] = q_shared_new
-
-        # ---- Check for convergence ----
-        if np.abs(delta1) < tolerance and np.abs(delta2) < tolerance:
-            q1 = q1_new
-            q2 = q2_new
+    # Pipe parameters
+    pipes = {
+        1: {"length": 1500, "diameter": 10, "roughness": 100},
+        2: {"length": 400, "diameter": 10, "roughness": 100},
+        3: {"length": 600, "diameter": 10, "roughness": 120},
+        4: {"length": 800, "diameter": 8, "roughness": 110},
+        5: {"length": 700, "diameter": 8, "roughness": 110},
+        6: {"length": 1000, "diameter": 10, "roughness": 90},
+        7: {"length": 750, "diameter": 10, "roughness": 100}
+    }
+    
+    # Calculate k values for each pipe
+    k_values = {}
+    for pipe_id, params in pipes.items():
+        k_values[pipe_id] = kfunc(params["length"], params["roughness"], params["diameter"])
+    
+    # Define loops and initial flows
+    # Loop 1: pipes 1, 2, 3, 4 (clockwise)
+    # Loop 2: pipes 4, 5, 6, 7 (clockwise)
+    
+    # Initial flow guesses in cfs
+    # Positive flow is in the direction specified by the loop orientation
+    flows = {
+        1: 0.77574,   # From A to D
+        2: 2.0,       # From A to B
+        3: 0.784386,  # From B to C
+        4: 0.215614,  # From D to C (shared pipe)
+        5: 0.963214,  # From E to D
+        6: 1.431227,  # From E to F
+        7: 0.215614   # From F to C
+    }
+    
+    # Loop definitions: [pipe_id, direction]
+    # Direction: 1 if flow is in same direction as loop traversal, -1 if opposite
+    loop1 = [
+        (1, 1),   # From A to D, positive in loop 1
+        (4, 1),   # From D to C, positive in loop 1
+        (3, -1),  # From C to B, negative in loop 1
+        (2, -1)   # From B to A, negative in loop 1
+    ]
+    
+    loop2 = [
+        (5, 1),   # From E to D, positive in loop 2
+        (4, -1),  # From C to D, negative in loop 2 (opposite of loop 1)
+        (7, 1),   # From F to C, positive in loop 2
+        (6, -1)   # From F to E, negative in loop 2
+    ]
+    
+    # Perform Hardy-Cross iterations
+    for iteration in range(MAX_ITERATIONS):
+        # Calculate flow corrections for loop 1
+        loop1_sum_hf = 0
+        loop1_sum_dhf = 0
+        
+        for pipe_id, direction in loop1:
+            flow = flows[pipe_id]
+            k = k_values[pipe_id]
+            
+            # Head loss with direction: k * |Q|^n * sign(Q) * direction
+            hf = k * abs(flow) ** N_EXPONENT * np.sign(flow) * direction
+            loop1_sum_hf += hf
+            
+            # Derivative term: n * k * |Q|^(n-1)
+            dhf = N_EXPONENT * k * abs(flow) ** (N_EXPONENT - 1)
+            loop1_sum_dhf += dhf
+        
+        # Calculate correction for loop 1
+        delta1 = -loop1_sum_hf / loop1_sum_dhf if loop1_sum_dhf != 0 else 0
+        
+        # Calculate flow corrections for loop 2
+        loop2_sum_hf = 0
+        loop2_sum_dhf = 0
+        
+        for pipe_id, direction in loop2:
+            flow = flows[pipe_id]
+            k = k_values[pipe_id]
+            
+            # Head loss with direction: k * |Q|^n * sign(Q) * direction
+            hf = k * abs(flow) ** N_EXPONENT * np.sign(flow) * direction
+            loop2_sum_hf += hf
+            
+            # Derivative term: n * k * |Q|^(n-1)
+            dhf = N_EXPONENT * k * abs(flow) ** (N_EXPONENT - 1)
+            loop2_sum_dhf += dhf
+        
+        # Calculate correction for loop 2
+        delta2 = -loop2_sum_hf / loop2_sum_dhf if loop2_sum_dhf != 0 else 0
+        
+        # Apply corrections to the flows
+        # For non-shared pipes in loop 1
+        for pipe_id, direction in loop1:
+            if pipe_id != 4:  # Non-shared pipes
+                flows[pipe_id] += delta1 * direction
+        
+        # For non-shared pipes in loop 2
+        for pipe_id, direction in loop2:
+            if pipe_id != 4:  # Non-shared pipes
+                flows[pipe_id] += delta2 * direction
+        
+        # For the shared pipe (pipe 4), we need to account for both loops
+        # Loop 1 sees pipe 4 with direction 1, Loop 2 sees it with direction -1
+        flows[4] += delta1 * 1 + delta2 * (-1)
+        
+        # Check for convergence
+        if abs(delta1) < TOLERANCE and abs(delta2) < TOLERANCE:
+            print(f"Converged after {iteration + 1} iterations")
             break
-
-        q1 = q1_new
-        q2 = q2_new
-
-    # ----- Final Output -----
-    print(f"Converged after {i+1} iterations")
-    print("Final q values for loop 1 (in cfs):", q1)
-    print("Final q values for loop 2 (in cfs):", q2)
-
-
+    else:
+        print(f"Did not converge after {MAX_ITERATIONS} iterations")
+    
+    # Print final flows
+    print("\nFinal Pipe Flows (cfs):")
+    for pipe_id, flow in flows.items():
+        print(f"Pipe {pipe_id}: {flow:.6f}")
+    
+    # Check mass balance at junctions
+    junctions = {
+        'A': {1: 1, 2: 1},         # Outflows from A
+        'B': {2: -1, 3: 1},        # Inflow to B, outflow from B
+        'C': {3: -1, 4: -1, 7: -1}, # Inflows to C
+        'D': {1: -1, 4: 1, 5: -1},  # Inflow to D, outflow from D
+        'E': {5: 1, 6: 1},         # Outflows from E
+        'F': {6: -1, 7: 1}         # Inflow to F, outflow from F
+    }
+    
+    print("\nJunction Mass Balance Check:")
+    for junction, connections in junctions.items():
+        balance = sum(flows[pipe_id] * direction for pipe_id, direction in connections.items())
+        print(f"Junction {junction}: {balance:.6f}")
+    
 if __name__ == "__main__":
     main()
